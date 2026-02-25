@@ -14,6 +14,7 @@ from routes.restaurant import router as restaurant_router
 from routes.auth import router as auth_router
 from routes.table import router as table_router
 from routes.session import router as session_router
+from routes.menu import router as menu_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -23,6 +24,7 @@ app.include_router(restaurant_router)
 app.include_router(auth_router)
 app.include_router(table_router)
 app.include_router(session_router)
+app.include_router(menu_router)
 
 @app.get("/")
 def home():
