@@ -13,6 +13,7 @@ from models.game import Game
 from routes.restaurant import router as restaurant_router
 from routes.auth import router as auth_router
 from routes.table import router as table_router
+from routes.session import router as session_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -21,6 +22,7 @@ app = FastAPI(title="Bierdeckel API")
 app.include_router(restaurant_router)
 app.include_router(auth_router)
 app.include_router(table_router)
+app.include_router(session_router)
 
 @app.get("/")
 def home():
