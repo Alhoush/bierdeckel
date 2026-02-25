@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from database.db import engine, Base
 
-# Alle Models importieren damit Tabellen erstellt werden
 from models.restaurant import Restaurant
 from models.user import User
 from models.table import Table
@@ -11,9 +10,13 @@ from models.order import Order, OrderItem
 from models.payment import Payment
 from models.game import Game
 
+from routes.restaurant import router as restaurant_router
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Bierdeckel API")
+
+app.include_router(restaurant_router)
 
 @app.get("/")
 def home():
