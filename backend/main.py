@@ -4,6 +4,7 @@ from database.db import engine, Base
 from models.restaurant import Restaurant
 from models.user import User
 from models.table import Table
+from models.drink import DrinkGroup, Invitation
 from models.session import TableSession
 from models.menu import MenuItem
 from models.order import Order, OrderItem
@@ -19,6 +20,7 @@ from routes.order import router as order_router
 from routes.payment import router as payment_router
 from routes.game import router as game_router
 from routes.service import router as service_router
+from routes.drink import router as drink_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -33,6 +35,7 @@ app.include_router(order_router)
 app.include_router(payment_router)
 app.include_router(game_router)
 app.include_router(service_router)
+app.include_router(drink_router)
 
 @app.get("/")
 def home():

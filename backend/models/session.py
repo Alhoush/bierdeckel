@@ -10,4 +10,6 @@ class TableSession(Base):
     table_id = Column(String, ForeignKey("tables.id"), nullable=False)
     restaurant_id = Column(String, ForeignKey("restaurants.id"), nullable=False)
     is_active = Column(Boolean, default=True)
+    drink_ready = Column(Boolean, default=False)
+    group_id = Column(String, ForeignKey("drink_groups.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
