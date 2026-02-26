@@ -17,6 +17,7 @@ from routes.session import router as session_router
 from routes.menu import router as menu_router
 from routes.order import router as order_router
 from routes.payment import router as payment_router
+from routes.game import router as game_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -29,6 +30,7 @@ app.include_router(session_router)
 app.include_router(menu_router)
 app.include_router(order_router)
 app.include_router(payment_router)
+app.include_router(game_router)
 
 @app.get("/")
 def home():
