@@ -7,5 +7,5 @@ class Table(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     table_number = Column(Integer, nullable=False)
-    qr_code = Column(String)
+    seats = Column(Integer, default=4)
     restaurant_id = Column(String, ForeignKey("restaurants.id"), nullable=False)

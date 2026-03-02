@@ -7,6 +7,7 @@ class TableSession(Base):
     __tablename__ = "sessions"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    bierdeckel_id = Column(String, ForeignKey("bierdeckel.id"), nullable=False)
     table_id = Column(String, ForeignKey("tables.id"), nullable=False)
     restaurant_id = Column(String, ForeignKey("restaurants.id"), nullable=False)
     is_active = Column(Boolean, default=True)

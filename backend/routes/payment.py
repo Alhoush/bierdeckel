@@ -1,14 +1,52 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 from database.db import get_db
 from models.payment import Payment
-from models.order import Order
+from models.order import Order, OrderItem
 from models.session import TableSession
+from models.menu import MenuItem
 from models.table import Table
 
 router = APIRouter()
+
+# Rechnung anzeigen (mit Artikeln)
+@router.get("/session/{session_id}/bill")
+def get_bill(session_id: str, db: Session = Depends(get_db)):
+    session = db.query(TableSession).filter(TableSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session nicht gefunden")
+
+    orders = db.query(Order).filter(Order.session_id == session_id).all()
+
+    items_list = []
+    total = 0
+    for order in orders:
+        order_items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+        for oi in order_items:
+            menu_item = db.query(MenuItem).filter(MenuItem.id == oi.menu_item_id).first()
+            items_list.append({
+                "name": menu_item.name if menu_item else "Unbekannt",
+                "quantity": oi.quantity,
+                "price": oi.price,
+                "subtotal": oi.price * oi.quantity
+            })
+            total += oi.price * oi.quantity
+
+    payments = db.query(Payment).filter(
+        Payment.session_id == session_id,
+        Payment.status == "completed"
+    ).all()
+    already_paid = sum(p.amount for p in payments)
+
+    return {
+        "session_id": session_id,
+        "items": items_list,
+        "total": total,
+        "already_paid": already_paid,
+        "remaining": total - already_paid
+    }
 
 # Einzelzahlung
 @router.post("/session/{session_id}/pay")
@@ -20,26 +58,19 @@ def pay_single(session_id: str, db: Session = Depends(get_db)):
     if not session:
         raise HTTPException(status_code=404, detail="Session nicht gefunden")
 
-    # Alle unbezahlten Bestellungen dieser Session
-    orders = db.query(Order).filter(
-        Order.session_id == session_id,
-        Order.status != "cancelled"
-    ).all()
+    orders = db.query(Order).filter(Order.session_id == session_id).all()
+    total = sum(o.total for o in orders)
 
-    total = sum(order.total for order in orders)
-
-    # Prüfen ob schon bezahlt
-    existing_payments = db.query(Payment).filter(
+    payments = db.query(Payment).filter(
         Payment.session_id == session_id,
         Payment.status == "completed"
     ).all()
-    already_paid = sum(p.amount for p in existing_payments)
-
+    already_paid = sum(p.amount for p in payments)
     remaining = total - already_paid
-    if remaining <= 0:
-        return {"message": "Bereits alles bezahlt", "total": total}
 
-    # Zahlung erstellen
+    if remaining <= 0:
+        raise HTTPException(status_code=400, detail="Bereits alles bezahlt")
+
     payment = Payment(
         session_id=session_id,
         amount=remaining,
@@ -58,66 +89,7 @@ def pay_single(session_id: str, db: Session = Depends(get_db)):
         "status": "completed"
     }
 
-# Gruppenzahlung (mehrere Sessions an einem Tisch)
-class GroupPayRequest(BaseModel):
-    session_ids: List[str]
-
-@router.post("/pay/group")
-def pay_group(data: GroupPayRequest, db: Session = Depends(get_db)):
-    total = 0
-    session_details = []
-
-    for sid in data.session_ids:
-        session = db.query(TableSession).filter(TableSession.id == sid).first()
-        if not session:
-            raise HTTPException(status_code=404, detail=f"Session {sid} nicht gefunden")
-
-        orders = db.query(Order).filter(
-            Order.session_id == sid,
-            Order.status != "cancelled"
-        ).all()
-        session_total = sum(order.total for order in orders)
-
-        # Bereits bezahlte Beträge abziehen
-        existing_payments = db.query(Payment).filter(
-            Payment.session_id == sid,
-            Payment.status == "completed"
-        ).all()
-        already_paid = sum(p.amount for p in existing_payments)
-        remaining = session_total - already_paid
-
-        total += remaining
-        session_details.append({
-            "session_id": sid,
-            "amount": remaining
-        })
-
-    if total <= 0:
-        return {"message": "Bereits alles bezahlt"}
-
-    # Zahlung für jede Session erstellen
-    payments = []
-    for detail in session_details:
-        if detail["amount"] > 0:
-            payment = Payment(
-                session_id=detail["session_id"],
-                amount=detail["amount"],
-                payment_type="group",
-                status="completed"
-            )
-            db.add(payment)
-            payments.append(detail)
-
-    db.commit()
-
-    return {
-        "total": total,
-        "payment_type": "group",
-        "status": "completed",
-        "sessions": payments
-    }
-
-# Zahlungswunsch senden (Gast drückt "Ich möchte zahlen")
+# Zahlungswunsch senden (Kellner rufen)
 @router.post("/session/{session_id}/payment-request")
 def request_payment(session_id: str, db: Session = Depends(get_db)):
     session = db.query(TableSession).filter(
@@ -127,9 +99,19 @@ def request_payment(session_id: str, db: Session = Depends(get_db)):
     if not session:
         raise HTTPException(status_code=404, detail="Session nicht gefunden")
 
+    orders = db.query(Order).filter(Order.session_id == session_id).all()
+    total = sum(o.total for o in orders)
+
+    payments = db.query(Payment).filter(
+        Payment.session_id == session_id,
+        Payment.status == "completed"
+    ).all()
+    already_paid = sum(p.amount for p in payments)
+    remaining = total - already_paid
+
     payment = Payment(
         session_id=session_id,
-        amount=0,
+        amount=remaining,
         payment_type="single",
         status="requested"
     )
@@ -138,59 +120,158 @@ def request_payment(session_id: str, db: Session = Depends(get_db)):
     db.refresh(payment)
 
     return {
-        "message": "Zahlungswunsch gesendet",
         "payment_id": payment.id,
-        "session_id": session_id
+        "amount": remaining,
+        "status": "requested",
+        "message": "Zahlungswunsch an Kellner gesendet!"
     }
 
-# Offene Zahlungswünsche für Restaurant (Service-Dashboard)
+# Offene Zahlungswünsche (Dashboard)
 @router.get("/restaurant/{restaurant_id}/payment-requests")
 def get_payment_requests(restaurant_id: str, db: Session = Depends(get_db)):
     sessions = db.query(TableSession).filter(
         TableSession.restaurant_id == restaurant_id,
         TableSession.is_active == True
     ).all()
-
     session_ids = [s.id for s in sessions]
-    requests = db.query(Payment).filter(
+
+    payments = db.query(Payment).filter(
         Payment.session_id.in_(session_ids),
         Payment.status == "requested"
     ).all()
 
     result = []
-    for r in requests:
-        session = db.query(TableSession).filter(TableSession.id == r.session_id).first()
+    for p in payments:
+        session = db.query(TableSession).filter(TableSession.id == p.session_id).first()
         table = db.query(Table).filter(Table.id == session.table_id).first()
-
-        # Offener Betrag berechnen
-        orders = db.query(Order).filter(Order.session_id == r.session_id).all()
-        total = sum(o.total for o in orders)
-
         result.append({
-            "payment_id": r.id,
+            "payment_id": p.id,
+            "session_id": p.session_id,
             "table_number": table.table_number if table else None,
-            "session_id": r.session_id,
-            "open_amount": total,
-            "created_at": str(r.created_at)
+            "amount": p.amount,
+            "status": p.status,
+            "created_at": str(p.created_at)
         })
     return result
 
-# Rechnung einer Session anzeigen
-@router.get("/session/{session_id}/bill")
-def get_bill(session_id: str, db: Session = Depends(get_db)):
-    orders = db.query(Order).filter(Order.session_id == session_id).all()
+# Kellner: Zahlung bestätigen
+@router.put("/payment/{payment_id}/confirm")
+def confirm_payment(payment_id: str, db: Session = Depends(get_db)):
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Zahlung nicht gefunden")
 
-    total = sum(o.total for o in orders)
-
-    existing_payments = db.query(Payment).filter(
-        Payment.session_id == session_id,
-        Payment.status == "completed"
-    ).all()
-    already_paid = sum(p.amount for p in existing_payments)
+    payment.status = "completed"
+    db.commit()
 
     return {
-        "session_id": session_id,
-        "total": total,
-        "already_paid": already_paid,
-        "remaining": total - already_paid
+        "message": "Zahlung bestätigt!",
+        "payment_id": payment_id,
+        "amount": payment.amount,
+        "status": "completed"
+    }
+
+# Für alle in der Gruppe bezahlen
+@router.post("/session/{session_id}/pay-group")
+def pay_for_group(session_id: str, db: Session = Depends(get_db)):
+    session = db.query(TableSession).filter(
+        TableSession.id == session_id,
+        TableSession.is_active == True
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session nicht gefunden")
+    if not session.group_id:
+        raise HTTPException(status_code=400, detail="Du bist in keiner Gruppe")
+
+    group_sessions = db.query(TableSession).filter(
+        TableSession.group_id == session.group_id,
+        TableSession.is_active == True
+    ).all()
+
+    total_paid = 0
+    paid_sessions = []
+
+    for gs in group_sessions:
+        orders = db.query(Order).filter(Order.session_id == gs.id).all()
+        total = sum(o.total for o in orders)
+
+        payments = db.query(Payment).filter(
+            Payment.session_id == gs.id,
+            Payment.status == "completed"
+        ).all()
+        already_paid = sum(p.amount for p in payments)
+        remaining = total - already_paid
+
+        if remaining > 0:
+            payment = Payment(
+                session_id=gs.id,
+                amount=remaining,
+                payment_type="group",
+                status="completed"
+            )
+            db.add(payment)
+            total_paid += remaining
+
+        table = db.query(Table).filter(Table.id == gs.table_id).first()
+        paid_sessions.append({
+            "session_id": gs.id,
+            "table_number": table.table_number if table else None,
+            "amount": remaining
+        })
+
+    db.commit()
+
+    return {
+        "message": f"Für alle bezahlt! Gesamt: {total_paid:.2f} €",
+        "total_paid": total_paid,
+        "paid_sessions": paid_sessions
+    }
+
+# Gruppen-Rechnung anzeigen
+@router.get("/session/{session_id}/group-bill")
+def get_group_bill(session_id: str, db: Session = Depends(get_db)):
+    session = db.query(TableSession).filter(TableSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session nicht gefunden")
+    if not session.group_id:
+        raise HTTPException(status_code=400, detail="Du bist in keiner Gruppe")
+
+    group_sessions = db.query(TableSession).filter(
+        TableSession.group_id == session.group_id,
+        TableSession.is_active == True
+    ).all()
+
+    group_total = 0
+    group_items = []
+
+    for gs in group_sessions:
+        table = db.query(Table).filter(Table.id == gs.table_id).first()
+        orders = db.query(Order).filter(Order.session_id == gs.id).all()
+
+        for order in orders:
+            order_items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+            for oi in order_items:
+                menu_item = db.query(MenuItem).filter(MenuItem.id == oi.menu_item_id).first()
+                group_items.append({
+                    "table_number": table.table_number if table else None,
+                    "name": menu_item.name if menu_item else "Unbekannt",
+                    "quantity": oi.quantity,
+                    "price": oi.price,
+                    "subtotal": oi.price * oi.quantity
+                })
+                group_total += oi.price * oi.quantity
+
+    group_paid = 0
+    for gs in group_sessions:
+        payments = db.query(Payment).filter(
+            Payment.session_id == gs.id,
+            Payment.status == "completed"
+        ).all()
+        group_paid += sum(p.amount for p in payments)
+
+    return {
+        "group_total": group_total,
+        "group_paid": group_paid,
+        "group_remaining": group_total - group_paid,
+        "items": group_items
     }

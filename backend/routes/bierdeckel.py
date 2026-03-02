@@ -5,14 +5,19 @@ from datetime import datetime
 from database.db import get_db
 from models.bierdeckel import Bierdeckel
 from models.table import Table
+import qrcode
+import io
+import base64
 
 router = APIRouter()
 
-class WeightUpdate(BaseModel):
-    table_id: str
-    weight: float  # Gewicht in Gramm
+class BierdeckelCreate(BaseModel):
+    label: str
 
-# Gewicht zu Füllstand umrechnen
+class WeightUpdate(BaseModel):
+    bierdeckel_id: str
+    weight: float
+
 def weight_to_status(weight: float) -> str:
     if weight < 50:
         return "empty"
@@ -23,55 +28,94 @@ def weight_to_status(weight: float) -> str:
     else:
         return "full"
 
-# --- MQTT Bridge schickt Daten hierher ---
-@router.post("/bierdeckel/update")
-def update_weight(data: WeightUpdate, db: Session = Depends(get_db)):
-    table = db.query(Table).filter(Table.id == data.table_id).first()
+# Bierdeckel erstellen (Admin)
+@router.post("/table/{table_id}/bierdeckel")
+def create_bierdeckel(table_id: str, data: BierdeckelCreate, db: Session = Depends(get_db)):
+    table = db.query(Table).filter(Table.id == table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Tisch nicht gefunden")
 
-    # Bierdeckel suchen oder neu erstellen
-    bierdeckel = db.query(Bierdeckel).filter(
-        Bierdeckel.table_id == data.table_id
-    ).first()
-
-    if not bierdeckel:
-        bierdeckel = Bierdeckel(
-            table_id=data.table_id,
-            restaurant_id=table.restaurant_id
-        )
-        db.add(bierdeckel)
-
-    bierdeckel.weight = data.weight
-    bierdeckel.status = weight_to_status(data.weight)
-    bierdeckel.last_updated = datetime.utcnow()
+    new_bd = Bierdeckel(
+        label=data.label,
+        table_id=table_id,
+        restaurant_id=table.restaurant_id
+    )
+    db.add(new_bd)
     db.commit()
-    db.refresh(bierdeckel)
+    db.refresh(new_bd)
+
+    # QR-Code URL generieren
+    qr_url = f"http://localhost:3000/r/{table.restaurant_id}/bd/{new_bd.id}"
+    new_bd.qr_code = qr_url
+    db.commit()
 
     return {
-        "table_id": data.table_id,
-        "weight": bierdeckel.weight,
-        "status": bierdeckel.status,
-        "last_updated": str(bierdeckel.last_updated)
+        "id": new_bd.id,
+        "label": new_bd.label,
+        "table_number": table.table_number,
+        "qr_code_url": new_bd.qr_code
     }
 
-# --- Einzelner Bierdeckel Status ---
-@router.get("/bierdeckel/{table_id}")
-def get_bierdeckel(table_id: str, db: Session = Depends(get_db)):
-    bierdeckel = db.query(Bierdeckel).filter(
-        Bierdeckel.table_id == table_id
-    ).first()
-    if not bierdeckel:
-        return {"table_id": table_id, "status": "no_data"}
+# Alle Bierdeckel eines Tisches
+@router.get("/table/{table_id}/bierdeckel")
+def get_bierdeckel_by_table(table_id: str, db: Session = Depends(get_db)):
+    bierdeckel = db.query(Bierdeckel).filter(Bierdeckel.table_id == table_id).all()
+    table = db.query(Table).filter(Table.id == table_id).first()
+
+    return [
+        {
+            "id": bd.id,
+            "label": bd.label,
+            "table_number": table.table_number if table else None,
+            "qr_code_url": bd.qr_code,
+            "weight": bd.weight,
+            "status": bd.status
+        }
+        for bd in bierdeckel
+    ]
+
+# QR-Code als Bild
+@router.get("/bierdeckel/{bierdeckel_id}/qr")
+def get_qr_code(bierdeckel_id: str, db: Session = Depends(get_db)):
+    bd = db.query(Bierdeckel).filter(Bierdeckel.id == bierdeckel_id).first()
+    if not bd:
+        raise HTTPException(status_code=404, detail="Bierdeckel nicht gefunden")
+
+    table = db.query(Table).filter(Table.id == bd.table_id).first()
+
+    qr = qrcode.make(bd.qr_code)
+    buffer = io.BytesIO()
+    qr.save(buffer, format="PNG")
+    qr_base64 = base64.b64encode(buffer.getvalue()).decode()
 
     return {
-        "table_id": bierdeckel.table_id,
-        "weight": bierdeckel.weight,
-        "status": bierdeckel.status,
-        "last_updated": str(bierdeckel.last_updated)
+        "bierdeckel_id": bd.id,
+        "label": bd.label,
+        "table_number": table.table_number if table else None,
+        "qr_code_url": bd.qr_code,
+        "qr_code_image": f"data:image/png;base64,{qr_base64}"
     }
 
-# --- Alle Bierdeckel eines Restaurants (Dashboard) ---
+# Gewicht aktualisieren (MQTT Bridge)
+@router.post("/bierdeckel/update")
+def update_weight(data: WeightUpdate, db: Session = Depends(get_db)):
+    bd = db.query(Bierdeckel).filter(Bierdeckel.id == data.bierdeckel_id).first()
+    if not bd:
+        raise HTTPException(status_code=404, detail="Bierdeckel nicht gefunden")
+
+    bd.weight = data.weight
+    bd.status = weight_to_status(data.weight)
+    bd.last_updated = datetime.utcnow()
+    db.commit()
+
+    return {
+        "bierdeckel_id": bd.id,
+        "weight": bd.weight,
+        "status": bd.status,
+        "last_updated": str(bd.last_updated)
+    }
+
+# Alle Bierdeckel eines Restaurants (Dashboard)
 @router.get("/restaurant/{restaurant_id}/bierdeckel")
 def get_all_bierdeckel(restaurant_id: str, db: Session = Depends(get_db)):
     bierdeckel = db.query(Bierdeckel).filter(
@@ -79,13 +123,14 @@ def get_all_bierdeckel(restaurant_id: str, db: Session = Depends(get_db)):
     ).all()
 
     result = []
-    for b in bierdeckel:
-        table = db.query(Table).filter(Table.id == b.table_id).first()
+    for bd in bierdeckel:
+        table = db.query(Table).filter(Table.id == bd.table_id).first()
         result.append({
+            "bierdeckel_id": bd.id,
+            "label": bd.label,
             "table_number": table.table_number if table else None,
-            "table_id": b.table_id,
-            "weight": b.weight,
-            "status": b.status,
-            "last_updated": str(b.last_updated)
+            "weight": bd.weight,
+            "status": bd.status,
+            "last_updated": str(bd.last_updated)
         })
     return result

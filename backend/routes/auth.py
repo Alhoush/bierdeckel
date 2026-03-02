@@ -99,7 +99,7 @@ def register_staff(restaurant_id: str, data: RegisterStaff, db: Session = Depend
     new_user = User(
         id=str(uuid.uuid4()),
         username=data.username,
-        password_hash=pwd_context.hash(data.password),
+        password_hash=hash_password(data.password),
         role=data.role,
         restaurant_id=restaurant_id
     )
@@ -134,6 +134,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
     return {
         "token": token,
+        "username": user.username,
         "role": user.role,
         "restaurant_id": user.restaurant_id
     }

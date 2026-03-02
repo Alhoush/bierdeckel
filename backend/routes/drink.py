@@ -193,14 +193,22 @@ def accept_invitation(invitation_id: str, db: Session = Depends(get_db)):
 
     invitation.status = "accepted"
 
+    # Session der Gruppe zuordnen
     session = db.query(TableSession).filter(TableSession.id == invitation.to_session_id).first()
     session.group_id = invitation.group_id
+
+    # Beide Spieler: drink_ready zurücksetzen
+    session.drink_ready = False
+    from_session = db.query(TableSession).filter(TableSession.id == invitation.from_session_id).first()
+    if from_session:
+        from_session.drink_ready = False
+
     db.commit()
 
     return {
         "message": "Einladung akzeptiert! Du bist jetzt in der Gruppe.",
         "group_id": invitation.group_id
-    }
+    }   
 
 # Einladung ablehnen
 @router.put("/invitation/{invitation_id}/decline")
