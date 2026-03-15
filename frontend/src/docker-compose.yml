@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - db-data:/app
+      - uploads:/app/uploads
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - WATCHPACK_POLLING=true
+
+volumes:
+  db-data:
+  uploads:
+```
+
+---
+
+### 6. `E:\bierdeckel\backend\.dockerignore`
+```
+venv/
+__pycache__/
+*.pyc
+bierdeckel.db
+```
+
+---
+
+### 7. `E:\bierdeckel\frontend\.dockerignore`
+```
+node_modules/
+build/
