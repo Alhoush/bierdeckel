@@ -101,7 +101,14 @@ function Payment() {
                         <h3 style={styles.billTitle}>📋 Deine Bestellungen</h3>
                         {bill.items.map((item, i) => (
                             <div key={i} style={styles.billItem}>
-                                <span>{item.quantity}x {item.name}</span>
+                                <div>
+                                    <span>{item.quantity}x {item.name}</span>
+                                    {item.source_label && (
+                                        <span style={item.source === 'game_loser' ? styles.gameLoser : styles.gameWinner}>
+                                            {' '}{item.source_label}
+                                        </span>
+                                    )}
+                                </div>
                                 <span>{item.subtotal.toFixed(2)} €</span>
                             </div>
                         ))}
@@ -186,7 +193,9 @@ const styles = {
     payButton: { width: '100%', padding: '15px', background: '#e94560', color: 'white', border: 'none', borderRadius: '10px', fontSize: '18px', cursor: 'pointer' },
     payGroupButton: { width: '100%', padding: '15px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '10px', fontSize: '18px', cursor: 'pointer' },
     success: { textAlign: 'center', marginTop: '100px' },
-    leaveButton: { marginTop: '20px', padding: '15px 40px', background: '#333', color: 'white', border: 'none', borderRadius: '10px', fontSize: '16px', cursor: 'pointer' }
+    leaveButton: { marginTop: '20px', padding: '15px 40px', background: '#333', color: 'white', border: 'none', borderRadius: '10px', fontSize: '16px', cursor: 'pointer' },
+    gameLoser: { fontSize: '11px', color: '#e94560', display: 'block' },
+    gameWinner: { fontSize: '11px', color: '#4CAF50', display: 'block' },
 };
 
 export default Payment;

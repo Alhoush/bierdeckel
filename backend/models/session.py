@@ -10,6 +10,7 @@ class TableSession(Base):
     bierdeckel_id = Column(String, ForeignKey("bierdeckel.id"), nullable=False)
     table_id = Column(String, ForeignKey("tables.id"), nullable=False)
     restaurant_id = Column(String, ForeignKey("restaurants.id"), nullable=False)
+    customer_id = Column(String, ForeignKey("customers.id"), nullable=True)  # NEU - optional
     is_active = Column(Boolean, default=True)
     drink_ready = Column(Boolean, default=False)
     group_id = Column(String, ForeignKey("drink_groups.id"), nullable=True)

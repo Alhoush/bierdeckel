@@ -1,11 +1,31 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import API from '../../api';
 
 function Navbar() {
+    const navigate = useNavigate();
     const location = useLocation();
-    const [showService, setShowService] = useState(false);
-    const sessionId = localStorage.getItem('session_id');
+
+    useEffect(() => {
+        const interval = setInterval(checkSession, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const checkSession = async () => {
+        const sessionId = localStorage.getItem('session_id');
+        if (!sessionId) return;
+        try {
+            const res = await API.get(`/session/${sessionId}`);
+            if (!res.data.is_active) {
+                alert('Deine Session wurde vom Service beendet. Tschüss!');
+                localStorage.clear();
+                navigate('/');
+            }
+        } catch (err) {
+            localStorage.clear();
+            navigate('/');
+        }
+    };
 
     const tabs = [
         { path: '/menu', label: '🍺', name: 'Menü' },
@@ -14,102 +34,32 @@ function Navbar() {
         { path: '/payment', label: '💳', name: 'Bezahlen' },
         { path: '/drink', label: '🍻', name: 'Zusammen' },
         { path: '/game', label: '🎮', name: 'Spiel' },
+        { path: '/leaderboard', label: '🏆', name: 'Rang' },
+        { path: '/profile', label: '👤', name: 'Profil' },
     ];
 
-    const sendServiceRequest = async (type, message) => {
-        try {
-            await API.post(`/session/${sessionId}/service-request`, {
-                request_type: type,
-                message: message
-            });
-            alert('✅ Anfrage gesendet!');
-            setShowService(false);
-        } catch (err) {
-            alert('Fehler beim Senden');
-        }
-    };
-
     return (
-        <>
-            {showService && (
-                <div style={styles.overlay}>
-                    <div style={styles.modal}>
-                        <h3 style={styles.modalTitle}>🔔 Service rufen</h3>
-                        <button onClick={() => sendServiceRequest('waiter', 'Kellner bitte!')} style={styles.serviceButton}>
-                            🧑‍🍳 Kellner rufen
-                        </button>
-                        <button onClick={() => sendServiceRequest('napkins', 'Servietten bitte')} style={styles.serviceButton}>
-                            🧻 Servietten
-                        </button>
-                        <button onClick={() => sendServiceRequest('other', 'Sonstige Anfrage')} style={styles.serviceButton}>
-                            ❓ Sonstiges
-                        </button>
-                        <button onClick={() => setShowService(false)} style={styles.closeButton}>
-                            Schließen
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            <div style={styles.serviceTab}>
-                <button onClick={() => setShowService(true)} style={styles.serviceMainButton}>
-                    🔔 Service
+        <div style={styles.navbar}>
+            {tabs.map(tab => (
+                <button
+                    key={tab.path}
+                    onClick={() => navigate(tab.path)}
+                    style={location.pathname === tab.path ? styles.activeTab : styles.tab}
+                >
+                    <span style={styles.icon}>{tab.label}</span>
+                    <span style={styles.tabName}>{tab.name}</span>
                 </button>
-            </div>
-
-            <nav style={styles.nav}>
-                {tabs.map(tab => (
-                    <Link
-                        key={tab.path}
-                        to={tab.path}
-                        style={{
-                            ...styles.tab,
-                            color: location.pathname === tab.path ? '#e94560' : '#888'
-                        }}
-                    >
-                        <span style={styles.icon}>{tab.label}</span>
-                        <span style={styles.name}>{tab.name}</span>
-                    </Link>
-                ))}
-            </nav>
-        </>
+            ))}
+        </div>
     );
 }
 
 const styles = {
-    nav: {
-        position: 'fixed', bottom: 0, left: 0, right: 0,
-        background: '#1a1a2e', display: 'flex', justifyContent: 'space-around',
-        padding: '8px 0', borderTop: '1px solid #333'
-    },
-    tab: { textDecoration: 'none', textAlign: 'center', fontSize: '11px' },
-    icon: { display: 'block', fontSize: '20px' },
-    name: { display: 'block', marginTop: '2px' },
-    serviceTab: {
-        position: 'fixed', bottom: '65px', left: 0, right: 0,
-        display: 'flex', justifyContent: 'center', padding: '5px'
-    },
-    serviceMainButton: {
-        background: '#e94560', color: 'white', border: 'none',
-        padding: '10px 30px', borderRadius: '20px', fontSize: '14px', cursor: 'pointer',
-        boxShadow: '0 2px 10px rgba(233,69,96,0.3)'
-    },
-    overlay: {
-        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-        background: 'rgba(0,0,0,0.8)', display: 'flex',
-        justifyContent: 'center', alignItems: 'center', zIndex: 1000
-    },
-    modal: { background: '#1a1a2e', padding: '25px', borderRadius: '15px', width: '300px' },
-    modalTitle: { textAlign: 'center', color: 'white', marginBottom: '20px' },
-    serviceButton: {
-        width: '100%', padding: '15px', background: '#0f0f23', color: 'white',
-        border: '1px solid #333', borderRadius: '10px', fontSize: '16px',
-        cursor: 'pointer', marginBottom: '10px'
-    },
-    closeButton: {
-        width: '100%', padding: '12px', background: '#333', color: 'white',
-        border: 'none', borderRadius: '10px', fontSize: '14px', cursor: 'pointer', marginTop: '5px'
-    }
+    navbar: { position: 'fixed', bottom: 0, left: 0, right: 0, display: 'flex', background: '#1a1a2e', borderTop: '1px solid #333', padding: '5px 0', zIndex: 999 },
+    tab: { flex: 1, background: 'none', color: '#888', border: 'none', padding: '8px 0', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center' },
+    activeTab: { flex: 1, background: 'none', color: '#e94560', border: 'none', padding: '8px 0', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center' },
+    icon: { fontSize: '18px' },
+    tabName: { fontSize: '10px', marginTop: '2px' }
 };
 
 export default Navbar;

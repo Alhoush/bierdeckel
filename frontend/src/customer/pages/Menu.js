@@ -1,41 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import API from '../../api';
 
 function Menu() {
     const [menu, setMenu] = useState({});
     const [cart, setCart] = useState([]);
     const restaurantId = localStorage.getItem('restaurant_id');
-    const sessionId = localStorage.getItem('session_id');
-    const navigate = useNavigate();
 
     useEffect(() => {
         loadMenu();
         const savedCart = JSON.parse(localStorage.getItem('cart') || '[]');
         setCart(savedCart);
-
-        // Session-Check alle 5 Sekunden
-        const interval = setInterval(checkSession, 5000);
-        return () => clearInterval(interval);
     }, []);
 
-    const checkSession = async () => {
-        try {
-            const res = await API.get(`/session/${sessionId}`);
-            if (!res.data.is_active) {
-                alert('Deine Session wurde vom Service beendet. Tschüss!');
-                localStorage.clear();
-                navigate('/');
-            }
-        } catch (err) {
-            localStorage.clear();
-            navigate('/');
-        }
-    };
-
     const loadMenu = async () => {
-        const res = await API.get(`/restaurant/${restaurantId}/menu`);
-        setMenu(res.data);
+        try {
+            const res = await API.get(`/restaurant/${restaurantId}/menu`);
+            setMenu(res.data);
+        } catch (err) {
+            console.error('Menü laden fehlgeschlagen:', err);
+        }
     };
 
     const addToCart = (item) => {
@@ -63,6 +46,10 @@ function Menu() {
         <div style={styles.container}>
             <h1 style={styles.title}>🍺 Speisekarte</h1>
             <p style={styles.tableInfo}>Tisch {localStorage.getItem('table_number')}</p>
+
+            {Object.keys(menu).length === 0 && (
+                <p style={styles.empty}>Menü ist leer</p>
+            )}
 
             {Object.entries(menu).map(([category, items]) => (
                 <div key={category} style={styles.category}>
@@ -103,7 +90,8 @@ const styles = {
     addButton: {
         background: '#e94560', color: 'white', border: 'none', borderRadius: '50%',
         width: '40px', height: '40px', fontSize: '20px', cursor: 'pointer'
-    }
+    },
+    empty: { color: '#888', textAlign: 'center', marginTop: '50px' }
 };
 
 export default Menu;

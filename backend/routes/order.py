@@ -65,6 +65,28 @@ def create_order(session_id: str, data: OrderCreate, db: Session = Depends(get_d
     new_order.total = total
     db.commit()
 
+    # Treuepunkte aktualisieren
+    if session.customer_id:
+        from models.loyalty import LoyaltyProgram, CustomerLoyalty
+        programs = db.query(LoyaltyProgram).filter(
+            LoyaltyProgram.restaurant_id == session.restaurant_id,
+            LoyaltyProgram.is_active == True
+        ).all()
+        for prog in programs:
+            loyalty = db.query(CustomerLoyalty).filter(
+                CustomerLoyalty.customer_id == session.customer_id,
+                CustomerLoyalty.loyalty_program_id == prog.id
+            ).first()
+            if not loyalty:
+                loyalty = CustomerLoyalty(
+                    customer_id=session.customer_id,
+                    loyalty_program_id=prog.id,
+                    current_count=0
+                )
+                db.add(loyalty)
+            loyalty.current_count += 1
+            db.commit()
+
     return {
         "order_id": new_order.id,
         "session_id": session_id,

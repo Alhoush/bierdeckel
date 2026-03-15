@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import List
 from datetime import datetime
 from database.db import get_db
-from models.game import Game
+from models.game import Game, GamePlayer
 from models.session import TableSession
 from models.order import Order, OrderItem
 from models.menu import MenuItem
@@ -12,29 +11,13 @@ from models.table import Table
 
 router = APIRouter()
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean
-from database.db import Base, engine
-import uuid
-
-class GamePlayer(Base):
-    __tablename__ = "game_players"
-
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    game_id = Column(String, ForeignKey("games.id"), nullable=False)
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
-    status = Column(String, default="pending")  # pending, approved, declined
-    finished = Column(Boolean, default=False)
-    finished_at = Column(DateTime, nullable=True)
-
-GamePlayer.__table__.create(bind=engine, checkfirst=True)
-
 class GameCreate(BaseModel):
     menu_item_id: str
 
 class PlayerFinish(BaseModel):
     session_id: str
 
-# Spiel erstellen (Kunde A)
+# Spiel erstellen
 @router.post("/session/{session_id}/game/create")
 def create_game(session_id: str, data: GameCreate, db: Session = Depends(get_db)):
     session = db.query(TableSession).filter(
@@ -48,28 +31,6 @@ def create_game(session_id: str, data: GameCreate, db: Session = Depends(get_db)
     if not menu_item:
         raise HTTPException(status_code=404, detail="Getränk nicht gefunden")
 
-    # Prüfen ob Ersteller das Getränk geliefert bekommen hat
-    orders = db.query(Order).filter(
-        Order.session_id == session_id,
-        Order.status == "delivered"
-    ).all()
-
-    has_drink = False
-    for order in orders:
-        items = db.query(OrderItem).filter(
-            OrderItem.order_id == order.id,
-            OrderItem.menu_item_id == data.menu_item_id
-        ).all()
-        if items:
-            has_drink = True
-            break
-
-    if not has_drink:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Du hast kein geliefertes '{menu_item.name}'. Erst bestellen und liefern lassen!"
-        )
-
     new_game = Game(
         session_id=session_id,
         game_type="drink_race",
@@ -79,7 +40,6 @@ def create_game(session_id: str, data: GameCreate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(new_game)
 
-    # Ersteller als genehmigter Spieler
     player = GamePlayer(
         game_id=new_game.id,
         session_id=session_id,
@@ -100,7 +60,7 @@ def create_game(session_id: str, data: GameCreate, db: Session = Depends(get_db)
         "message": "Spiel erstellt! Warte auf Mitspieler."
     }
 
-# Offene Spiele im Restaurant anzeigen
+# Offene Spiele
 @router.get("/restaurant/{restaurant_id}/games")
 def get_open_games(restaurant_id: str, db: Session = Depends(get_db)):
     sessions = db.query(TableSession).filter(
@@ -108,6 +68,9 @@ def get_open_games(restaurant_id: str, db: Session = Depends(get_db)):
         TableSession.is_active == True
     ).all()
     session_ids = [s.id for s in sessions]
+
+    if not session_ids:
+        return []
 
     games = db.query(Game).filter(
         Game.session_id.in_(session_ids),
@@ -132,7 +95,7 @@ def get_open_games(restaurant_id: str, db: Session = Depends(get_db)):
         })
     return result
 
-# Beitritt anfragen (Kunde B)
+# Beitritt anfragen
 @router.post("/game/{game_id}/request-join/{session_id}")
 def request_join(game_id: str, session_id: str, db: Session = Depends(get_db)):
     game = db.query(Game).filter(Game.id == game_id).first()
@@ -141,14 +104,6 @@ def request_join(game_id: str, session_id: str, db: Session = Depends(get_db)):
     if game.status != "waiting":
         raise HTTPException(status_code=400, detail="Spiel akzeptiert keine Spieler mehr")
 
-    session = db.query(TableSession).filter(
-        TableSession.id == session_id,
-        TableSession.is_active == True
-    ).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session nicht gefunden")
-
-    # Prüfen ob schon angefragt
     existing = db.query(GamePlayer).filter(
         GamePlayer.game_id == game_id,
         GamePlayer.session_id == session_id
@@ -164,15 +119,9 @@ def request_join(game_id: str, session_id: str, db: Session = Depends(get_db)):
     db.add(player)
     db.commit()
 
-    table = db.query(Table).filter(Table.id == session.table_id).first()
+    return {"message": "Beitritt angefragt!", "game_id": game_id}
 
-    return {
-        "message": "Beitritt angefragt!",
-        "game_id": game_id,
-        "table_number": table.table_number if table else None
-    }
-
-# Anfragen sehen (Ersteller)
+# Anfragen sehen
 @router.get("/game/{game_id}/requests")
 def get_join_requests(game_id: str, db: Session = Depends(get_db)):
     requests = db.query(GamePlayer).filter(
@@ -200,7 +149,6 @@ def approve_player(game_id: str, player_id: str, db: Session = Depends(get_db)):
     ).first()
     if not player:
         raise HTTPException(status_code=404, detail="Spieler nicht gefunden")
-
     player.status = "approved"
     db.commit()
     return {"message": "Spieler genehmigt!"}
@@ -214,12 +162,11 @@ def decline_player(game_id: str, player_id: str, db: Session = Depends(get_db)):
     ).first()
     if not player:
         raise HTTPException(status_code=404, detail="Spieler nicht gefunden")
-
     player.status = "declined"
     db.commit()
     return {"message": "Spieler abgelehnt"}
 
-# Spiel starten (Ersteller)
+# Spiel starten
 @router.put("/game/{game_id}/start")
 def start_game(game_id: str, db: Session = Depends(get_db)):
     game = db.query(Game).filter(Game.id == game_id).first()
@@ -232,25 +179,13 @@ def start_game(game_id: str, db: Session = Depends(get_db)):
     ).all()
 
     if len(approved) < 2:
-        raise HTTPException(status_code=400, detail="Mindestens 2 genehmigte Spieler nötig")
-
-    # Prüfen ob alle genehmigten Spieler ein geliefertes Getränk haben
-    for player in approved:
-        orders = db.query(Order).filter(
-            Order.session_id == player.session_id,
-            Order.status == "delivered"
-        ).all()
-        if not orders:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Spieler hat kein geliefertes Getränk"
-            )
+        raise HTTPException(status_code=400, detail="Mindestens 2 Spieler nötig")
 
     game.status = "active"
     db.commit()
     return {"message": "Spiel gestartet!", "game_id": game_id}
 
-# Spieler ist fertig (hat ausgetrunken)
+# Fertig getrunken
 @router.post("/game/{game_id}/finish")
 def player_finished(game_id: str, data: PlayerFinish, db: Session = Depends(get_db)):
     game = db.query(Game).filter(Game.id == game_id).first()
@@ -288,7 +223,6 @@ def player_finished(game_id: str, data: PlayerFinish, db: Session = Depends(get_
         extra_cost = 0
 
         for winner in winners:
-            # Finde das Getränk des Gewinners
             winner_orders = db.query(Order).filter(
                 Order.session_id == winner.session_id,
                 Order.status == "delivered"
@@ -313,11 +247,12 @@ def player_finished(game_id: str, data: PlayerFinish, db: Session = Depends(get_
                     break
 
             if found_item and drink_item_id:
-                # 1. Getränk auf Verlierer-Rechnung buchen
+                # Getränk auf Verlierer-Rechnung (markiert als Spiel)
                 loser_order = Order(
                     session_id=loser.session_id,
                     total=drink_price,
-                    status="delivered"
+                    status="delivered",
+                    source="game_loser"
                 )
                 db.add(loser_order)
                 db.flush()
@@ -331,7 +266,7 @@ def player_finished(game_id: str, data: PlayerFinish, db: Session = Depends(get_
                 db.add(loser_item)
                 extra_cost += drink_price
 
-                # 2. Getränk von Gewinner-Rechnung entfernen
+                # Gewinner-Getränk als "vom Spiel bezahlt" markieren
                 if found_item.quantity > 1:
                     found_item.quantity -= 1
                     found_order.total = found_order.total - drink_price
@@ -339,30 +274,66 @@ def player_finished(game_id: str, data: PlayerFinish, db: Session = Depends(get_
                     found_order.total = found_order.total - drink_price
                     db.delete(found_item)
 
-                # Wenn Order leer ist, entfernen
-                remaining_items = db.query(OrderItem).filter(
-                    OrderItem.order_id == found_order.id
-                ).count()
-                if remaining_items == 0 or (remaining_items == 1 and found_item.quantity <= 1):
-                    if found_order.total <= 0:
-                        found_order.total = 0
+                # Gutschrift-Order für Gewinner
+                winner_credit = Order(
+                    session_id=winner.session_id,
+                    total=0,
+                    status="delivered",
+                    source="game_winner"
+                )
+                db.add(winner_credit)
+                db.flush()
+
+                if found_order.total <= 0:
+                    found_order.total = 0
 
         db.commit()
 
+        # Spielstatistik aktualisieren
+        try:
+            from models.customer_stats import CustomerStats
+            for p in all_players:
+                p_session = db.query(TableSession).filter(TableSession.id == p.session_id).first()
+                if p_session and p_session.customer_id:
+                    stats = db.query(CustomerStats).filter(
+                        CustomerStats.customer_id == p_session.customer_id,
+                        CustomerStats.restaurant_id == p_session.restaurant_id
+                    ).first()
+                    if not stats:
+                        stats = CustomerStats(
+                            customer_id=p_session.customer_id,
+                            restaurant_id=p_session.restaurant_id,
+                            games_played=0,
+                            games_won=0,
+                            games_lost=0,
+                            total_spent=0
+                        )
+                        db.add(stats)
+                        db.flush()
+                    stats.games_played += 1
+                    if p.session_id == loser.session_id:
+                        stats.games_lost += 1
+                        stats.total_spent += extra_cost
+                    else:
+                        stats.games_won += 1
+            db.commit()
+        except Exception as e:
+            print(f"Stats error: {e}")
+
         return {
-            "message": "Spiel beendet! Verlierer zahlt die Getränke der Gewinner!",
+            "message": "Spiel beendet! Verlierer zahlt die Getränke!",
             "loser_session_id": loser.session_id,
             "extra_cost": extra_cost,
             "game_status": "finished"
         }
 
     return {
-        "message": "Fertig! Warte auf andere Spieler...",
+        "message": "Fertig! Warte auf andere...",
         "remaining_players": len(not_finished),
         "game_status": "active"
     }
 
-# Spielstatus abrufen
+# Spielstatus
 @router.get("/game/{game_id}")
 def get_game(game_id: str, db: Session = Depends(get_db)):
     game = db.query(Game).filter(Game.id == game_id).first()

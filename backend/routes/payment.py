@@ -26,11 +26,22 @@ def get_bill(session_id: str, db: Session = Depends(get_db)):
         order_items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
         for oi in order_items:
             menu_item = db.query(MenuItem).filter(MenuItem.id == oi.menu_item_id).first()
+
+            # Quelle bestimmen
+            if order.source == "game_loser":
+                source_label = "🎮 Spiel (du zahlst)"
+            elif order.source == "game_winner":
+                source_label = "🎮 Spiel (gratis!)"
+            else:
+                source_label = None
+
             items_list.append({
                 "name": menu_item.name if menu_item else "Unbekannt",
                 "quantity": oi.quantity,
                 "price": oi.price,
-                "subtotal": oi.price * oi.quantity
+                "subtotal": oi.price * oi.quantity,
+                "source": order.source,
+                "source_label": source_label
             })
             total += oi.price * oi.quantity
 

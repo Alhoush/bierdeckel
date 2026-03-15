@@ -17,6 +17,11 @@ def create_table(restaurant_id: str, data: TableCreate, db: Session = Depends(ge
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant nicht gefunden")
 
+    if data.table_number < 1:
+        raise HTTPException(status_code=400, detail="Tischnummer muss mindestens 1 sein")
+    if data.seats < 1:
+        raise HTTPException(status_code=400, detail="Plätze müssen mindestens 1 sein")
+
     existing = db.query(Table).filter(
         Table.restaurant_id == restaurant_id,
         Table.table_number == data.table_number
