@@ -7,6 +7,7 @@ from models.bierdeckel import Bierdeckel
 from models.table import Table
 import qrcode
 import io
+import os
 import base64
 
 router = APIRouter()
@@ -45,7 +46,8 @@ def create_bierdeckel(table_id: str, data: BierdeckelCreate, db: Session = Depen
     db.refresh(new_bd)
 
     # QR-Code URL generieren
-    qr_url = f"http://localhost:3000/r/{table.restaurant_id}/bd/{new_bd.id}"
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+    qr_url = f"{frontend_url}/r/{table.restaurant_id}/bd/{new_bd.id}"
     new_bd.qr_code = qr_url
     db.commit()
 
