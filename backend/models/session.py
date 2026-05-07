@@ -10,8 +10,10 @@ class TableSession(Base):
     bierdeckel_id = Column(String, ForeignKey("bierdeckel.id"), nullable=False)
     table_id = Column(String, ForeignKey("tables.id"), nullable=False)
     restaurant_id = Column(String, ForeignKey("restaurants.id"), nullable=False)
-    customer_id = Column(String, ForeignKey("customers.id"), nullable=True)  # NEU - optional
+    customer_id = Column(String, ForeignKey("customers.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     drink_ready = Column(Boolean, default=False)
     group_id = Column(String, ForeignKey("drink_groups.id"), nullable=True)
+    auto_order = Column(Boolean, default=False)
+    auto_order_item_id = Column(String, ForeignKey("menu_items.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

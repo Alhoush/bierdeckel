@@ -192,10 +192,12 @@ def get_restaurant_orders(restaurant_id: str, db: Session = Depends(get_db)):
 
         result.append({
             "order_id": order.id,
-            "table_number": table.table_number if table else None,
             "items": order_items,
             "total": order.total,
             "status": order.status,
+            "source": order.source or "manual",
             "created_at": str(order.created_at)
         })
     return result
+
+# Bestellstatus ändern (für Service)

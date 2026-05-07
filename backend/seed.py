@@ -32,7 +32,7 @@ def seed_database():
     owner = User(
         id="owner-001",
         username="hans",
-        password=hash_password("hans123"),
+        password_hash=hash_password("hans123"),
         role="owner",
         restaurant_id="restaurant-001"
     )
@@ -42,7 +42,7 @@ def seed_database():
     kellner = User(
         id="staff-001",
         username="max",
-        password=hash_password("max123"),
+        password_hash=hash_password("max123"),
         role="staff",
         restaurant_id="restaurant-001"
     )
@@ -50,10 +50,10 @@ def seed_database():
 
     # === TEAM ADMINS ===
     admins = [
-        User(id="admin-001", username="jens", password=hash_password("jens123"), role="admin", restaurant_id="restaurant-001"),
-        User(id="admin-002", username="alex", password=hash_password("alex123"), role="admin", restaurant_id="restaurant-001"),
-        User(id="admin-003", username="chrissi", password=hash_password("chrissi123"), role="admin", restaurant_id="restaurant-001"),
-        User(id="admin-004", username="mirek", password=hash_password("mirek123"), role="admin", restaurant_id="restaurant-001"),
+        User(id="admin-001", username="jens", password_hash=hash_password("jens123"), role="admin", restaurant_id="restaurant-001"),
+        User(id="admin-002", username="alex", password_hash=hash_password("alex123"), role="admin", restaurant_id="restaurant-001"),
+        User(id="admin-003", username="chrissi", password_hash=hash_password("chrissi123"), role="admin", restaurant_id="restaurant-001"),
+        User(id="admin-004", username="mirek", password_hash=hash_password("mirek123"), role="admin", restaurant_id="restaurant-001"),
     ]
     for a in admins:
         db.add(a)
@@ -66,6 +66,8 @@ def seed_database():
     ]
     for t in tables:
         db.add(t)
+
+    # === BIERDECKEL (FESTE IDs - NICHT ÄNDERN!) ===
 
     # === BIERDECKEL (FESTE IDs - NICHT ÄNDERN!) ===
     bierdeckel = [

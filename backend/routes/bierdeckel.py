@@ -114,11 +114,59 @@ def update_weight(data: WeightUpdate, db: Session = Depends(get_db)):
     bd.last_updated = datetime.utcnow()
     db.commit()
 
+    # Auto-Bestellung prüfen
+    auto_ordered = False
+    if bd.status == "empty":
+        from models.session import TableSession
+        from models.order import Order, OrderItem
+        from models.menu import MenuItem
+
+        active_session = db.query(TableSession).filter(
+            TableSession.bierdeckel_id == bd.id,
+            TableSession.is_active == True,
+            TableSession.auto_order == True
+        ).first()
+
+        if active_session and active_session.auto_order_item_id:
+            menu_item = db.query(MenuItem).filter(
+                MenuItem.id == active_session.auto_order_item_id
+            ).first()
+
+            if menu_item:
+                # Prüfen ob nicht schon eine offene Auto-Bestellung existiert
+                existing = db.query(Order).filter(
+                    Order.session_id == active_session.id,
+                    Order.source == "auto_order",
+                    Order.status.in_(["pending", "preparing"])
+                ).first()
+
+                if not existing:
+                    new_order = Order(
+                        session_id=active_session.id,
+                        total=menu_item.price,
+                        status="pending",
+                        source="auto_order"
+                    )
+                    db.add(new_order)
+                    db.flush()
+
+                    new_item = OrderItem(
+                        order_id=new_order.id,
+                        menu_item_id=menu_item.id,
+                        quantity=1,
+                        price=menu_item.price
+                    )
+                    db.add(new_item)
+                    db.commit()
+                    auto_ordered = True
+                    print(f"Auto-Bestellung: {menu_item.name} für Session {active_session.id}")
+
     return {
         "bierdeckel_id": bd.id,
         "weight": bd.weight,
         "status": bd.status,
-        "last_updated": str(bd.last_updated)
+        "last_updated": str(bd.last_updated),
+        "auto_ordered": auto_ordered
     }
 
 # Alle Bierdeckel eines Restaurants (Dashboard)

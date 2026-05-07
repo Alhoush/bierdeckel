@@ -32,6 +32,7 @@ from routes.drink import router as drink_router
 from routes.customer import router as customer_router
 from routes.leaderboard import router as leaderboard_router
 from routes.loyalty import router as loyalty_router
+from routes.auto_order import router as auto_order_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -63,6 +64,7 @@ app.include_router(drink_router)
 app.include_router(customer_router)
 app.include_router(leaderboard_router)
 app.include_router(loyalty_router)
+app.include_router(auto_order_router)
 
 # Datenbank mit Startdaten befüllen
 from seed import seed_database
