@@ -64,6 +64,10 @@ app.include_router(customer_router)
 app.include_router(leaderboard_router)
 app.include_router(loyalty_router)
 
+# Datenbank mit Startdaten befüllen
+from seed import seed_database
+seed_database()
+
 @app.get("/")
 def home():
     return {"message": "Willkommen bei Bierdeckel API!"}
