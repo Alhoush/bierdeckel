@@ -24,7 +24,7 @@ function Login() {
     return (
         <div style={styles.container}>
             <div style={styles.loginBox}>
-                <h1 style={styles.title}>🍺 Bierdeckel</h1>
+                <h1 style={styles.title}>🍺 CheersMate</h1>
                 <h2 style={styles.subtitle}>Service Login</h2>
 
                 {error && <p style={styles.error}>{error}</p>}

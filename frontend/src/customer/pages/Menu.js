@@ -4,6 +4,8 @@ import API from '../../api';
 function Menu() {
     const [menu, setMenu] = useState({});
     const [cart, setCart] = useState([]);
+    const [showService, setShowService] = useState(false);
+    const sessionId = localStorage.getItem('session_id');
     const restaurantId = localStorage.getItem('restaurant_id');
 
     useEffect(() => {
@@ -42,6 +44,19 @@ function Menu() {
         return item ? item.quantity : 0;
     };
 
+    const callService = async (type) => {
+        try {
+            await API.post(`/session/${sessionId}/service-request`, {
+                request_type: type,
+                message: ''
+            });
+            alert('Service-Anfrage gesendet!');
+            setShowService(false);
+        } catch (err) {
+            alert('Fehler beim Senden');
+        }
+    };
+
     return (
         <div style={styles.container}>
             <h1 style={styles.title}>🍺 Speisekarte</h1>
@@ -70,6 +85,21 @@ function Menu() {
             ))}
 
             <div style={{ height: '100px' }}></div>
+            {/* Kellner rufen Button */}
+            <button onClick={() => setShowService(true)} style={styles.serviceFloating}>🔔</button>
+
+            {showService && (
+                <div style={styles.serviceOverlay}>
+                    <div style={styles.serviceModal}>
+                        <h3>Service rufen</h3>
+                        <button onClick={() => callService('waiter')} style={styles.serviceButton}>🧑‍🍳 Kellner rufen</button>
+                        <button onClick={() => callService('napkins')} style={styles.serviceButton}>🧻 Servietten</button>
+                        <button onClick={() => callService('other')} style={styles.serviceButton}>❓ Sonstiges</button>
+                        <button onClick={() => setShowService(false)} style={styles.serviceClose}>Schließen</button>
+                    </div>
+                </div>
+            )}
+            
         </div>
     );
 }
@@ -91,6 +121,11 @@ const styles = {
         background: '#e94560', color: 'white', border: 'none', borderRadius: '50%',
         width: '40px', height: '40px', fontSize: '20px', cursor: 'pointer'
     },
+    serviceFloating: { position: 'fixed', bottom: '80px', right: '20px', width: '55px', height: '55px', borderRadius: '50%', background: '#e94560', color: 'white', border: 'none', fontSize: '24px', cursor: 'pointer', zIndex: 998, boxShadow: '0 2px 10px rgba(233,69,96,0.4)' },
+    serviceOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+    serviceModal: { background: '#1a1a2e', padding: '25px', borderRadius: '15px', width: '280px', display: 'flex', flexDirection: 'column', gap: '10px' },
+    serviceButton: { padding: '14px', background: '#0f0f23', color: 'white', border: '1px solid #333', borderRadius: '10px', fontSize: '16px', cursor: 'pointer', textAlign: 'left' },
+    serviceClose: { padding: '12px', background: '#333', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', marginTop: '5px' },
     empty: { color: '#888', textAlign: 'center', marginTop: '50px' }
 };
 

@@ -73,7 +73,7 @@ function Home() {
 
     return (
         <div style={styles.container}>
-            <h1 style={styles.logo}>🍺 Bierdeckel</h1>
+            <h1 style={styles.logo}>🍺 CheersMate</h1>
             <p style={styles.tableInfo}>Tisch {sessionData?.table_number}</p>
 
             {view === 'welcome' && (

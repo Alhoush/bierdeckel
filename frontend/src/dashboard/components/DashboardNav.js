@@ -23,7 +23,7 @@ function DashboardNav() {
 
     return (
         <div style={styles.nav}>
-            <h2 style={styles.logo}>🍺 Bierdeckel</h2>
+            <h2 style={styles.logo}>🍺 CheersMate</h2>
             <div style={styles.links}>
                 {links
                     .filter(link => !link.adminOnly || role === 'owner' || role === 'admin')
