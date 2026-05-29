@@ -106,9 +106,7 @@ function Cart() {
                 <div style={styles.serviceOverlay}>
                     <div style={styles.serviceModal}>
                         <h3>Service rufen</h3>
-                        <button onClick={() => callService('waiter')} style={styles.serviceButton}>🧑‍🍳 Kellner rufen</button>
-                        <button onClick={() => callService('napkins')} style={styles.serviceButton}>🧻 Servietten</button>
-                        <button onClick={() => callService('other')} style={styles.serviceButton}>❓ Sonstiges</button>
+                        <button onClick={() => callService('waiter')} style={styles.serviceButton}>🧑‍🍳 Servicekraft rufen</button>          
                         <button onClick={() => setShowService(false)} style={styles.serviceClose}>Schließen</button>
                     </div>
                 </div>
