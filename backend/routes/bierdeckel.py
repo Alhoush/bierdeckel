@@ -19,16 +19,12 @@ class WeightUpdate(BaseModel):
     bierdeckel_id: str
     weight: float
 
-GLASS_WEIGHT = 0  # TODO: Glasgewicht hier eintragen
-
 def weight_to_status(weight: float) -> str:
-    if weight < GLASS_WEIGHT:
+    if weight < 40:
         return "no_glass"
-    elif weight < GLASS_WEIGHT + 50:
+    elif weight < 300:
         return "empty"
-    elif weight < GLASS_WEIGHT + 200:
-        return "low"
-    elif weight < GLASS_WEIGHT + 350:
+    elif weight < 320:
         return "half"
     else:
         return "full"
