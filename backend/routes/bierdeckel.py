@@ -20,12 +20,12 @@ class WeightUpdate(BaseModel):
     weight: float
 
 def weight_to_status(weight: float) -> str:
-    if weight < 40:
+    if weight < 100:
         return "no_glass"
     elif weight < 300:
         return "empty"
-    elif weight < 320:
-        return "half"
+#   elif weight < 320:
+#      return "half"
     else:
         return "full"
 
